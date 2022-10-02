@@ -1,0 +1,79 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+    id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name       String?   @db.VarChar(255)
+    roleId     String?   @map("role_id") @db.Uuid
+    username   String    @unique @db.VarChar(100)
+    password   String    @db.VarChar(250)
+    status     Int?      @default(1)
+    insertTime DateTime  @default(now()) @map("insert_time")
+    updateTime DateTime? @updatedAt @map("update_time")
+
+    role Role? @relation(fields: [roleId], references: [id])
+
+    @@map("user")
+}
+
+model Role {
+    id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name        String  @unique @db.VarChar(50)
+    description String? @db.VarChar(250)
+
+    insertTime  DateTime     @default(now()) @map("insert_time")
+    updateTime  DateTime?    @updatedAt @map("update_time")
+    users       User[]
+    permissions Permission[]
+
+    @@map("role")
+}
+
+model Permission {
+    canView   Boolean? @map("can_view")
+    canCreate Boolean? @map("can_create")
+    canEdit   Boolean? @map("can_edit")
+    canDelete Boolean? @map("can_delete")
+    roleId    String   @map("role_id") @db.Uuid
+    featureId String   @map("feature_id") @db.Uuid
+
+    insertTime DateTime  @default(now()) @map("insert_time")
+    updateTime DateTime? @updatedAt @map("update_time")
+
+    role    Role?    @relation(fields: [roleId], references: [id])
+    feature Feature? @relation(fields: [featureId], references: [id])
+
+    @@id([roleId, featureId])
+    @@map("permission")
+}
+
+model Feature {
+    id   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    code String @unique @db.VarChar(10)
+    name String @db.VarChar(100)
+
+    insertTime  DateTime     @default(now()) @map("insert_time")
+    updateTime  DateTime?    @updatedAt @map("update_time")
+    permissions Permission[]
+
+    @@map("feature")
+}
+
+model Client {
+    id         String    @id @db.VarChar(24)
+    name       String?   @db.VarChar(255)
+    location   String?   @db.VarChar(255)
+    groupId    String?   @map("group_id") @db.VarChar(24)
+    username   String    @unique @db.VarChar(100)
+    password   String    @db.VarChar(250)
+    insertTime DateTime  @default(now()) @map("insert_time")
+    updateTime DateTime? @updatedAt @map("update_time")
+
+    @@map("client")
+}
