@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import { default as axios } from 'axios';
 import { ConfigService } from '../../../config';
 import { MainRepo } from '../../../repositories/main.repo';
@@ -13,15 +13,25 @@ export class ClientService {
 
   constructor(private readonly _repo: MainRepo) {}
 
-  async checkUserNameOfClient(username: string) {
-    this.logger.log(`checkUserNameOfClient: ${username}`);
+  async checkUserNameOfClient(input: ClientRequestDto) {
+    const userExist = await this._repo.getClient().findFirst({
+      where: { username: { equals: input.username, mode: 'insensitive' } },
+      select: { username: true }
+    });
+
+    if (userExist || userExist?.username.toLowerCase() === input.username.toLowerCase())
+      throw new BadRequestException([{ field: 'username', message: 'Tên đăng nhập đã tồn tại' }]);
+
+    this.logger.log(`checkUserNameOfClient: ${input.username}`);
     const res = await axios({
       method: 'GET',
-      url: `${configService.get('BACKEND_PATH_API')}/api/crm/client/check-exist/${username}`,
+      url: `${configService.get('BACKEND_PATH_API')}/api/crm/client/check-exist/${input.username}`,
       timeout: 10000 //10s
     });
     if (res.data) return true;
-    const isExistsUSerName = await this._repo.getClient().count({ where: { username } });
+    const isExistsUSerName = await this._repo
+      .getClient()
+      .count({ where: { username: { equals: input.username, mode: 'insensitive' } } });
     return Boolean(isExistsUSerName);
   }
 
@@ -59,5 +69,29 @@ export class ClientService {
     delete newClient.password;
 
     return newClient;
+  }
+
+  async callApiDeleteClientBackend(id: string) {
+    this.logger.log(`callApiDeleteClientBackend: ${id}`);
+    try {
+      const res = await axios({
+        method: 'DELETE',
+        url: `${configService.get('BACKEND_PATH_API')}/api/crm/client/${id}`,
+        timeout: 10000 //10s
+      });
+      return res.data.id;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
+  async deleteClient(id: string) {
+    const client = await this._repo.getClient().findFirst({ where: { id } });
+    if (!client) throw new BadRequestException([{ field: 'clientId', message: 'Client not found' }]);
+
+    const idClient = await this.callApiDeleteClientBackend(id);
+    await this._repo.getClient().delete({ where: { id: idClient } });
+
+    return { status: true };
   }
 }
